@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JDQ 費用対説明ツール</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- html2canvas CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- jsPDF CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --accent: #1a6fc4;
+      --accent-light: #e8f1fb;
+      --accent-dark: #145aa0;
+      --bg: #f5f7fa;
+      --white: #ffffff;
+      --text: #1e2532;
+      --text-sub: #5a6478;
+      --border: #dde3ee;
+      --shadow: 0 2px 12px rgba(26,111,196,0.08);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --profit-color: #16a34a;
+      --loss-color: #dc2626;
+      --bar-cost: #1a6fc4;
+      --bar-sales: #22c55e;
+      --line-cum: #f59e0b;
+    }
+    html { font-size: 15px; }
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ===== Header ===== */
+    header {
+      background: var(--white);
+      border-bottom: 2px solid var(--accent);
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo .logo-badge {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 4px 12px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+    }
+    .header-logo .logo-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .header-date {
+      font-size: 0.82rem;
+      color: var(--text-sub);
+    }
+    .btn-pdf {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 9px 22px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s, transform 0.1s;
+      letter-spacing: 0.03em;
+    }
+    .btn-pdf:hover { background: var(--accent-dark); }
+    .btn-pdf:active { transform: scale(0.97); }
+    .btn-pdf svg { width: 16px; height: 16px; }
+
+    /* ===== Layout ===== */
+    .main-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px 48px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ===== Card ===== */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      border: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1.5px solid var(--accent-light);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title svg { width: 15px; height: 15px; }
+
+    /* ===== Input Panel ===== */
+    .input-panel { display: flex; flex-direction: column; gap: 20px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+    .form-label span.required {
+      color: var(--accent);
+      margin-left: 4px;
+      font-size: 0.75rem;
+    }
+
+    select, input[type="number"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      color: var(--text);
+      background: var(--white);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235a6478' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    select:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(26,111,196,0.12);
+    }
+
+    .input-hint {
+      font-size: 0.76rem;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    /* Package info box */
+    .package-info-box {
+      background: var(--accent-light);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+    }
+    .pkg-info-item { display: flex; flex-direction: column; gap: 2px; }
+    .pkg-info-label { font-size: 0.72rem; color: var(--text-sub); font-weight: 600; }
+    .pkg-info-value { font-size: 0.92rem; font-weight: 700; color: var(--accent); }
+
+    /* ===== Right Panel ===== */
+    .right-panel { display: flex; flex-direction: column; gap: 24px; }
+
+    /* ===== KPI Cards ===== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .kpi-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .kpi-card.accent-card {
+      background: linear-gradient(135deg, var(--accent) 0%, #2980d9 100%);
+      border-color: transparent;
+      color: #fff;
+    }
+    .kpi-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-sub);
+      letter-spacing: 0.04em;
+    }
+    .kpi-card.accent-card .kpi-label { color: rgba(255,255,255,0.8); }
+    .kpi-value {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .kpi-card.accent-card .kpi-value { color: #fff; }
+    .kpi-sub {
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+    .kpi-card.accent-card .kpi-sub { color: rgba(255,255,255,0.75); }
+    .kpi-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-top: 4px;
+    }
+    .badge-theory { background: #dbeafe; color: #1d4ed8; }
+    .badge-safe { background: #fef3c7; color: #92400e; }
+
+    /* ===== Section Title ===== */
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* ===== Chart Area ===== */
+    .chart-wrapper {
+      position: relative;
+      height: 320px;
+    }
+
+    /* ===== Summary Table ===== */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .summary-item {
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+    }
+    .summary-label {
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .summary-value {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .summary-value.positive { color: var(--profit-color); }
+    .summary-value.negative { color: var(--loss-color); }
+
+    /* ===== Monthly Table ===== */
+    .monthly-table-wrap { overflow-x: auto; }
+    table.monthly-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    table.monthly-table th {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-weight: 700;
+      padding: 10px 14px;
+      text-align: center;
+      border-bottom: 2px solid var(--accent);
+      white-space: nowrap;
+    }
+    table.monthly-table td {
+      padding: 10px 14px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    table.monthly-table td:first-child { text-align: center; font-weight: 700; }
+    table.monthly-table td:nth-child(2) { text-align: left; color: var(--text-sub); }
+    table.monthly-table tr:last-child td { border-bottom: none; }
+    table.monthly-table tr:hover td { background: var(--accent-light); }
+    .cum-positive { color: var(--profit-color); font-weight: 700; }
+    .cum-negative { color: var(--loss-color); font-weight: 700; }
+    .breakeven-row td { background: #fef9c3 !important; }
+    .breakeven-badge {
+      display: inline-block;
+      background: #fbbf24;
+      color: #78350f;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 10px;
+      margin-left: 6px;
+    }
+
+    /* ===== Legend ===== */
+    .chart-legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      font-weight: 600;
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+    .legend-line {
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    /* ===== Footer ===== */
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      border-top: 1px solid var(--border);
+      background: var(--white);
+      margin-top: 32px;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 900px) {
+      .main-container {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .summary-grid { grid-template-columns: 1fr 1fr; }
+      header { padding: 0 16px; }
+      .header-logo .logo-title { display: none; }
+    }
+    @media (max-width: 600px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ===== PDF Print ===== */
+    @media print {
+      header { position: static; }
+      .btn-pdf { display: none; }
+    }
+
+    /* ===== Spinner ===== */
+    .spinner-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.7);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .spinner-overlay.active { display: flex; }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-text { font-size: 0.9rem; color: var(--text-sub); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<!-- Spinner -->
+<div class="spinner-overlay" id="spinnerOverlay">
+  <div class="spinner"></div>
+  <div class="spinner-text">PDF生成中...</div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="header-logo">
+    <span class="logo-badge">JDQ</span>
+    <span class="logo-title">費用対説明ツール &mdash; インバウンドインフルエンサーマーケティング</span>
+  </div>
+  <div class="header-right">
+    <span class="header-date" id="headerDate"></span>
+    <button class="btn-pdf" id="btnPdf" onclick="downloadPDF()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17"/>
+      </svg>
+      PDFダウンロード
+    </button>
+  </div>
+</header>
+
+<!-- Main -->
+<div class="main-container" id="mainContent">
+
+  <!-- Left: Input Panel -->
+  <aside class="input-panel">
+
+    <!-- Package Selection -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        パッケージ選択
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="packageSelect">プラン</label>
+        <select id="packageSelect" onchange="onInputChange()">
+          <option value="china1">中華圏①</option>
+          <option value="china2">中華圏②</option>
+          <option value="korea1">韓国①</option>
+          <option value="korea2">韓国②</option>
+        </select>
+      </div>
+      <div class="package-info-box" id="packageInfoBox" style="margin-top:14px;">
+        <div class="pkg-info-item">
+          <span class="pkg-info-label">月額費用</span>
+          <span class="pkg-info-value" id="pkgMonthlyFee">¥300,000</span>
+        </div>
+        <div class="pkg-info-item">
+          <span class="pkg-info-label">初期費用</span>
+          <span class="pkg-info-value">¥200,000</span>
+        </div>
+        <div class="pkg-info-item">
+          <span class="pkg-info-label">投稿本数（6ヶ月）</span>
+          <span class="pkg-info-value" id="pkgPosts">37本</span>
+        </div>
+        <div class="pkg-info-item">
+          <span class="pkg-info-label">キャスティング名数（6ヶ月）</span>
+          <span class="pkg-info-value" id="pkgCasting">74名</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Numeric Inputs -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+        店舗情報入力
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="unitPrice">客単価<span class="required">*</span></label>
+        <input type="number" id="unitPrice" value="5000" min="100" step="100" oninput="onInputChange()" />
+        <span class="input-hint">円（例：5000）</span>
+      </div>
+
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label" for="costRate">食材原価率<span class="required">*</span></label>
+        <input type="number" id="costRate" value="30" min="1" max="99" step="1" oninput="onInputChange()" />
+        <span class="input-hint">%（例：30）</span>
+      </div>
+
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label" for="daysPerMonth">月日数<span class="required">*</span></label>
+        <input type="number" id="daysPerMonth" value="30" min="1" max="31" step="1" oninput="onInputChange()" />
+        <span class="input-hint">日（例：30）</span>
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div class="card" style="background:var(--accent-light); border-color: #bfdbfe;">
+      <div style="font-size:0.78rem; color:var(--accent); font-weight:700; margin-bottom:8px;">ご利用ガイド</div>
+      <ul style="font-size:0.76rem; color:var(--text-sub); line-height:1.8; padding-left:16px;">
+        <li>入力値を変更すると即座に再計算されます</li>
+        <li>右上のボタンからPDF出力が可能です</li>
+        <li>グラフは黒字転換月を自動ハイライトします</li>
+      </ul>
+    </div>
+
+  </aside>
+
+  <!-- Right: Results Panel -->
+  <div class="right-panel">
+
+    <!-- KPI Cards -->
+    <div>
+      <div class="section-title">単月費用対計算</div>
+      <div class="kpi-grid">
+        <div class="kpi-card accent-card">
+          <div class="kpi-label">必要売上（月）</div>
+          <div class="kpi-value" id="kpiRevenue">¥0</div>
+          <div class="kpi-sub">月額費用 ÷ (1 - 原価率) + キャスティング原価</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">理論ライン</div>
+          <span class="kpi-badge badge-theory">THEORY</span>
+          <div class="kpi-value" id="kpiTheoryMonth">0.0名/月</div>
+          <div class="kpi-sub" id="kpiTheoryDay">0.00名/日</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">安全ライン</div>
+          <span class="kpi-badge badge-safe">SAFE ×1.2</span>
+          <div class="kpi-value" id="kpiSafeMonth">0.0名/月</div>
+          <div class="kpi-sub" id="kpiSafeDay">0.00名/日</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6-Month Simulation Chart -->
+    <div class="card">
+      <div class="section-title">6ヶ月売上シミュレーション</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--bar-cost);"></div>月次費用</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--bar-sales);"></div>予測売上</div>
+        <div class="legend-item"><div class="legend-line" style="background:var(--line-cum);"></div>累積損益</div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="simChart"></canvas>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">6ヶ月累計費用</div>
+          <div class="summary-value" id="sumCost">¥0</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">6ヶ月累計予測売上</div>
+          <div class="summary-value" id="sumSales">¥0</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">損益差額</div>
+          <div class="summary-value" id="sumDiff">¥0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Table -->
+    <div class="card">
+      <div class="section-title">月別詳細データ</div>
+      <div class="monthly-table-wrap">
+        <table class="monthly-table">
+          <thead>
+            <tr>
+              <th>月</th>
+              <th>フェーズ</th>
+              <th>月次費用</th>
+              <th>予測売上</th>
+              <th>月次損益</th>
+              <th>累積損益</th>
+            </tr>
+          </thead>
+          <tbody id="monthlyTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  &copy; 2025 JAPAN DOT QUEST Co., Ltd. &nbsp;|&nbsp; このツールは営業商談用シミュレーションです。実際の効果を保証するものではありません。
+</footer>
+
+<script>
+// ===== Package Data =====
+const PACKAGES = {
+  china1: { name: '中華圏①', monthlyFee: 300000, posts6m: 37, casting6m: 74 },
+  china2: { name: '中華圏②', monthlyFee: 400000, posts6m: 46, casting6m: 92 },
+  korea1: { name: '韓国①',   monthlyFee: 300000, posts6m: 37, casting6m: 74 },
+  korea2: { name: '韓国②',   monthlyFee: 400000, posts6m: 46, casting6m: 92 },
+};
+const INITIAL_FEE = 200000;
+const SAFE_FACTOR = 1.2;
+const MONTHS = 6;
+
+// ===== Chart Instance =====
+let simChartInstance = null;
+
+// ===== Date =====
+(function setDate() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  document.getElementById('headerDate').textContent = `${y}年${m}月${day}日`;
+})();
+
+// ===== Helpers =====
+function fmt(n) {
+  return '¥' + Math.round(n).toLocaleString('ja-JP');
+}
+function fmtNum(n, digits = 1) {
+  return n.toFixed(digits);
+}
+function getInputs() {
+  const pkg = PACKAGES[document.getElementById('packageSelect').value];
+  const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 5000;
+  const costRate = (parseFloat(document.getElementById('costRate').value) || 30) / 100;
+  const daysPerMonth = parseFloat(document.getElementById('daysPerMonth').value) || 30;
+  return { pkg, unitPrice, costRate, daysPerMonth };
+}
+
+// ===== Calculation =====
+function calcMonthly(pkg, unitPrice, costRate, daysPerMonth) {
+  // キャスティング原価（月）
+  const castingCostMonth = unitPrice * (pkg.casting6m / MONTHS) * costRate;
+  // 必要売上（月）= 月額費用 ÷ (1 - 原価率) + キャスティング原価（月）
+  const requiredRevenue = pkg.monthlyFee / (1 - costRate) + castingCostMonth;
+  // 理論ライン：必要来客数 = 必要売上 ÷ 客単価
+  const theoryGuestsMonth = requiredRevenue / unitPrice;
+  const theoryGuestsDay = theoryGuestsMonth / daysPerMonth;
+  // 安全ライン（×1.2）
+  const safeRevenue = requiredRevenue * SAFE_FACTOR;
+  const safeGuestsMonth = safeRevenue / unitPrice;
+  const safeGuestsDay = safeGuestsMonth / daysPerMonth;
+
+  return {
+    requiredRevenue,
+    castingCostMonth,
+    theoryGuestsMonth,
+    theoryGuestsDay,
+    safeRevenue,
+    safeGuestsMonth,
+    safeGuestsDay,
+  };
+}
+
+function calcSimulation(pkg, unitPrice, costRate) {
+  // キャスティング原価（月）
+  const castingCostMonth = unitPrice * (pkg.casting6m / MONTHS) * costRate;
+  // 必要売上（月）= 月額費用 ÷ (1 - 原価率) + キャスティング原価（月）
+  const requiredRevenue = pkg.monthlyFee / (1 - costRate) + castingCostMonth;
+
+  // 月次費用：必要売上ベース
+  // 1ヶ月目：必要売上 + 初期費用（¥200,000）
+  // 2〜6ヶ月目：必要売上
+  const costs = [];
+  for (let i = 1; i <= MONTHS; i++) {
+    if (i === 1) {
+      costs.push(requiredRevenue + INITIAL_FEE);
+    } else {
+      costs.push(requiredRevenue);
+    }
+  }
+
+  const totalCost = costs.reduce((a, b) => a + b, 0);
+
+  // 売上予測：1ヶ月目=0、2〜6ヶ月目で線形増加し6ヶ月累計≒6ヶ月累計費用
+  // 2〜6ヶ月目の5ヶ月で線形増加：S_k = a * k (k=1..5)
+  // sum = a*(1+2+3+4+5) = 15a = totalCost → a = totalCost/15
+  const a = totalCost / 15;
+  const sales = [0];
+  for (let k = 1; k <= 5; k++) {
+    sales.push(a * k);
+  }
+
+  const totalSales = sales.reduce((a, b) => a + b, 0);
+
+  // 累積損益
+  let cumProfit = 0;
+  const cumProfits = [];
+  const monthlyProfits = [];
+  for (let i = 0; i < MONTHS; i++) {
+    const mp = sales[i] - costs[i];
+    monthlyProfits.push(mp);
+    cumProfit += mp;
+    cumProfits.push(cumProfit);
+  }
+
+  // 黒字転換月（累積損益が初めて0以上になる月）
+  let breakevenMonth = null;
+  for (let i = 0; i < MONTHS; i++) {
+    if (cumProfits[i] >= 0) {
+      breakevenMonth = i + 1;
+      break;
+    }
+  }
+
+  return { costs, sales, totalCost, totalSales, cumProfits, monthlyProfits, breakevenMonth };
+}
+
+// ===== Update UI =====
+function onInputChange() {
+  const { pkg, unitPrice, costRate, daysPerMonth } = getInputs();
+
+  // Update package info box
+  document.getElementById('pkgMonthlyFee').textContent = fmt(pkg.monthlyFee);
+  document.getElementById('pkgPosts').textContent = pkg.posts6m + '本';
+  document.getElementById('pkgCasting').textContent = pkg.casting6m + '名';
+
+  // Monthly calc
+  const mc = calcMonthly(pkg, unitPrice, costRate, daysPerMonth);
+  document.getElementById('kpiRevenue').textContent = fmt(mc.requiredRevenue);
+  document.getElementById('kpiTheoryMonth').textContent = fmtNum(mc.theoryGuestsMonth, 1) + '名/月';
+  document.getElementById('kpiTheoryDay').textContent = fmtNum(mc.theoryGuestsDay, 2) + '名/日';
+  document.getElementById('kpiSafeMonth').textContent = fmtNum(mc.safeGuestsMonth, 1) + '名/月';
+  document.getElementById('kpiSafeDay').textContent = fmtNum(mc.safeGuestsDay, 2) + '名/日';
+
+  // Simulation
+  const sim = calcSimulation(pkg, unitPrice, costRate);
+  updateChart(sim);
+  updateTable(sim, pkg);
+  updateSummary(sim);
+}
+
+// ===== Chart =====
+function updateChart(sim) {
+  const labels = ['1ヶ月目', '2ヶ月目', '3ヶ月目', '4ヶ月目', '5ヶ月目', '6ヶ月目'];
+
+  const breakMonthIdx = sim.breakevenMonth != null ? sim.breakevenMonth - 1 : null;
+
+  // Breakeven annotation plugin (manual via afterDraw)
+  if (simChartInstance) {
+    simChartInstance.destroy();
+  }
+
+  const ctx = document.getElementById('simChart').getContext('2d');
+
+  // Custom plugin for breakeven line
+  const breakevenPlugin = {
+    id: 'breakevenLine',
+    afterDraw(chart) {
+      if (breakMonthIdx === null) return;
+      const { ctx, chartArea, scales } = chart;
+      const x = scales.x.getPixelForValue(breakMonthIdx);
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Badge
+      const badgeW = 72;
+      const badgeH = 20;
+      const bx = Math.min(x + 4, chartArea.right - badgeW - 4);
+      const by = chartArea.top + 4;
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.roundRect(bx, by, badgeW, badgeH, 4);
+      ctx.fill();
+      ctx.fillStyle = '#78350f';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('黒字転換', bx + badgeW / 2, by + badgeH / 2);
+      ctx.restore();
+    }
+  };
+
+  simChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '月次費用',
+          data: sim.costs,
+          backgroundColor: 'rgba(26,111,196,0.75)',
+          borderColor: 'rgba(26,111,196,1)',
+          borderWidth: 1.5,
+          borderRadius: 4,
+          order: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: '予測売上',
+          data: sim.sales,
+          backgroundColor: 'rgba(34,197,94,0.75)',
+          borderColor: 'rgba(34,197,94,1)',
+          borderWidth: 1.5,
+          borderRadius: 4,
+          order: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: '累積損益',
+          data: sim.cumProfits,
+          type: 'line',
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,0.1)',
+          borderWidth: 2.5,
+          pointBackgroundColor: sim.cumProfits.map(v => v >= 0 ? '#16a34a' : '#dc2626'),
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          tension: 0.35,
+          fill: true,
+          order: 1,
+          yAxisID: 'y2',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const val = ctx.raw;
+              const sign = val >= 0 ? '' : '';
+              return ` ${ctx.dataset.label}: ¥${Math.round(val).toLocaleString('ja-JP')}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { font: { size: 12 } },
+        },
+        y: {
+          position: 'left',
+          grid: { color: 'rgba(0,0,0,0.06)' },
+          ticks: {
+            font: { size: 11 },
+            callback: v => '¥' + (v / 10000).toFixed(0) + '万',
+          },
+          title: { display: true, text: '金額（円）', font: { size: 11 }, color: '#5a6478' },
+        },
+        y2: {
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: {
+            font: { size: 11 },
+            callback: v => '¥' + (v / 10000).toFixed(0) + '万',
+          },
+          title: { display: true, text: '累積損益（円）', font: { size: 11 }, color: '#f59e0b' },
+        },
+      },
+    },
+    plugins: [breakevenPlugin],
+  });
+}
+
+// ===== Table =====
+function updateTable(sim, pkg) {
+  const phases = [
+    'インフラ構築',
+    'PRアサインスタート',
+    'PR継続',
+    'PR継続',
+    'PR継続',
+    'PR継続',
+  ];
+  const tbody = document.getElementById('monthlyTableBody');
+  tbody.innerHTML = '';
+  for (let i = 0; i < MONTHS; i++) {
+    const isBreakeven = sim.breakevenMonth === (i + 1);
+    const tr = document.createElement('tr');
+    if (isBreakeven) tr.classList.add('breakeven-row');
+    const cumClass = sim.cumProfits[i] >= 0 ? 'cum-positive' : 'cum-negative';
+    tr.innerHTML = `
+      <td>${i + 1}ヶ月目${isBreakeven ? '<span class="breakeven-badge">黒字転換</span>' : ''}</td>
+      <td>${phases[i]}</td>
+      <td>${fmt(sim.costs[i])}</td>
+      <td>${fmt(sim.sales[i])}</td>
+      <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
+      <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// ===== Summary =====
+function updateSummary(sim) {
+  const diff = sim.totalSales - sim.totalCost;
+  document.getElementById('sumCost').textContent = fmt(sim.totalCost);
+  document.getElementById('sumSales').textContent = fmt(sim.totalSales);
+  const diffEl = document.getElementById('sumDiff');
+  diffEl.textContent = fmt(diff);
+  diffEl.className = 'summary-value ' + (diff >= 0 ? 'positive' : 'negative');
+}
+
+// ===== PDF Download =====
+async function downloadPDF() {
+  const spinner = document.getElementById('spinnerOverlay');
+  spinner.classList.add('active');
+  try {
+    const { jsPDF } = window.jspdf;
+    const content = document.getElementById('mainContent');
+
+    // Capture
+    const canvas = await html2canvas(content, {
+      scale: 1.5,
+      useCORS: true,
+      backgroundColor: '#f5f7fa',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const imgW = canvas.width;
+    const imgH = canvas.height;
+
+    // A4: 210 x 297 mm
+    const pdfW = 210;
+    const pdfH = (imgH * pdfW) / imgW;
+
+    const pdf = new jsPDF({
+      orientation: pdfH > pdfW ? 'portrait' : 'landscape',
+      unit: 'mm',
+      format: pdfH > 297 ? [pdfW, pdfH] : 'a4',
+    });
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+
+    // Filename
+    const pkg = PACKAGES[document.getElementById('packageSelect').value];
+    const d = new Date();
+    const dateStr = d.getFullYear().toString()
+      + String(d.getMonth() + 1).padStart(2, '0')
+      + String(d.getDate()).padStart(2, '0');
+    pdf.save(`JDQ_シミュレーション_${pkg.name}_${dateStr}.pdf`);
+  } catch (e) {
+    alert('PDF生成中にエラーが発生しました: ' + e.message);
+    console.error(e);
+  } finally {
+    spinner.classList.remove('active');
+  }
+}
+
+// ===== Init =====
+onInputChange();
+</script>
+</body>
+</html>
