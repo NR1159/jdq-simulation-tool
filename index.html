@@ -204,6 +204,40 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 16px;
     }
+    /* 安全ライン売上バナー */
+    .safe-revenue-banner {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      border-radius: var(--radius);
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      box-shadow: 0 2px 10px rgba(245,158,11,0.25);
+    }
+    .safe-revenue-banner .banner-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .safe-revenue-banner .banner-label::before {
+      content: '★';
+      font-size: 1rem;
+    }
+    .safe-revenue-banner .banner-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .safe-revenue-banner .banner-sub {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.85);
+      margin-top: 2px;
+      text-align: right;
+    }
     .kpi-card {
       background: var(--white);
       border-radius: var(--radius);
@@ -543,7 +577,7 @@
           <div class="kpi-sub">月額費用 ÷ (1 - 原価率) + キャスティング原価</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">理論ライン</div>
+          <div class="kpi-label">理論ライン（最低ライン）</div>
           <span class="kpi-badge badge-theory">THEORY</span>
           <div class="kpi-value" id="kpiTheoryMonth">0.0名/月</div>
           <div class="kpi-sub" id="kpiTheoryDay">0.00名/日</div>
@@ -553,6 +587,17 @@
           <span class="kpi-badge badge-safe">SAFE ×1.2</span>
           <div class="kpi-value" id="kpiSafeMonth">0.0名/月</div>
           <div class="kpi-sub" id="kpiSafeDay">0.00名/日</div>
+        </div>
+      </div>
+      <!-- 安全ライン売上バナー -->
+      <div class="safe-revenue-banner">
+        <div>
+          <div class="banner-label">クライアントへの提案目標売上（安全ライン）</div>
+          <div style="font-size:0.72rem;color:rgba(255,255,255,0.8);margin-top:3px;">安全ライン来客数 × 客単価 ／ 理論ラインの1.2倍の売上を目標に設定</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="banner-value" id="kpiSafeRevenue">¥0</div>
+          <div class="banner-sub" id="kpiSafeRevenueNote">0.0名/月 達成で実現</div>
         </div>
       </div>
     </div>
@@ -595,6 +640,9 @@
               <th>フェーズ</th>
               <th>月次費用</th>
               <th>予測売上</th>
+              <th style="background:#dbeafe;color:#1d4ed8;">最低ライン<br><span style="font-size:0.7rem;font-weight:500;">必要来客数</span></th>
+              <th style="background:#fef3c7;color:#92400e;">安全ライン<br><span style="font-size:0.7rem;font-weight:500;">必要来客数</span></th>
+              <th style="background:#fef3c7;color:#92400e;">安全ライン<br><span style="font-size:0.7rem;font-weight:500;">目標売上</span></th>
               <th>月次損益</th>
               <th>累積損益</th>
             </tr>
@@ -745,6 +793,9 @@ function onInputChange() {
   document.getElementById('kpiTheoryDay').textContent = fmtNum(mc.theoryGuestsDay, 2) + '名/日';
   document.getElementById('kpiSafeMonth').textContent = fmtNum(mc.safeGuestsMonth, 1) + '名/月';
   document.getElementById('kpiSafeDay').textContent = fmtNum(mc.safeGuestsDay, 2) + '名/日';
+  // 安全ライン売上バナー
+  document.getElementById('kpiSafeRevenue').textContent = fmt(mc.safeRevenue);
+  document.getElementById('kpiSafeRevenueNote').textContent = fmtNum(mc.safeGuestsMonth, 1) + '名/月 達成で実現';
 
   // Simulation
   const sim = calcSimulation(pkg, unitPrice, costRate);
@@ -898,6 +949,9 @@ function updateTable(sim, pkg) {
     'PR継続',
     'PR継続',
   ];
+  const { pkg: pkgCur, unitPrice, costRate, daysPerMonth } = getInputs();
+  const mc = calcMonthly(pkgCur, unitPrice, costRate, daysPerMonth);
+
   const tbody = document.getElementById('monthlyTableBody');
   tbody.innerHTML = '';
   for (let i = 0; i < MONTHS; i++) {
@@ -905,11 +959,18 @@ function updateTable(sim, pkg) {
     const tr = document.createElement('tr');
     if (isBreakeven) tr.classList.add('breakeven-row');
     const cumClass = sim.cumProfits[i] >= 0 ? 'cum-positive' : 'cum-negative';
+    // 最低ライン・安全ライン来客数（1ヶ月目はPR未開始のため「-」表示）
+    const theoryStr = i === 0 ? '-' : fmtNum(mc.theoryGuestsMonth, 1) + '名';
+    const safeStr   = i === 0 ? '-' : fmtNum(mc.safeGuestsMonth, 1) + '名';
+    const safeRevStr = i === 0 ? '-' : fmt(mc.safeRevenue);
     tr.innerHTML = `
       <td>${i + 1}ヶ月目${isBreakeven ? '<span class="breakeven-badge">黒字転換</span>' : ''}</td>
       <td>${phases[i]}</td>
       <td>${fmt(sim.costs[i])}</td>
       <td>${fmt(sim.sales[i])}</td>
+      <td style="text-align:center;color:#1d4ed8;font-weight:600;">${theoryStr}</td>
+      <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${safeStr}</td>
+      <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${safeRevStr}</td>
       <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
       <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
     `;
