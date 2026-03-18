@@ -774,7 +774,18 @@ function calcSimulation(pkg, unitPrice, costRate) {
     }
   }
 
-  return { costs, sales, totalCost, totalSales, cumProfits, monthlyProfits, breakevenMonth };
+  // 安全ライン売上・来客数：予測売上と同じ伸び率（線形増加）で算出
+  // 安全ライン必要売上 = requiredRevenue * SAFE_FACTOR
+  // 予測売上の伸び率をそのまま適用：safeSales[k] = sales[k] * (safeRevenue / requiredRevenue)
+  // ただし1ヶ月目=0（PR未開始）
+  const safeRevenue = requiredRevenue * SAFE_FACTOR;
+  const safeSales = sales.map(s => s === 0 ? 0 : s * SAFE_FACTOR);
+  const safeGuests = safeSales.map((s, i) => i === 0 ? 0 : s / (requiredRevenue / (requiredRevenue / (pkg.monthlyFee / (1 - costRate) + castingCostMonth) * requiredRevenue)));
+
+  // 安全ライン来客数 = 安全ライン売上 ÷ 客単価（unitPriceはここでは渡されないため売上ベースで保持）
+  // updateTable側でunitPriceで割る
+
+  return { costs, sales, totalCost, totalSales, cumProfits, monthlyProfits, breakevenMonth, safeSales, safeRevenue };
 }
 
 // ===== Update UI =====
@@ -959,21 +970,39 @@ function updateTable(sim, pkg) {
     const tr = document.createElement('tr');
     if (isBreakeven) tr.classList.add('breakeven-row');
     const cumClass = sim.cumProfits[i] >= 0 ? 'cum-positive' : 'cum-negative';
-    // 最低ライン・安全ライン来客数（1ヶ月目はPR未開始のため「-」表示）
-    const theoryStr = i === 0 ? '-' : fmtNum(mc.theoryGuestsMonth, 1) + '名';
-    const safeStr   = i === 0 ? '-' : fmtNum(mc.safeGuestsMonth, 1) + '名';
-    const safeRevStr = i === 0 ? '-' : fmt(mc.safeRevenue);
-    tr.innerHTML = `
-      <td>${i + 1}ヶ月目${isBreakeven ? '<span class="breakeven-badge">黒字転換</span>' : ''}</td>
-      <td>${phases[i]}</td>
-      <td>${fmt(sim.costs[i])}</td>
-      <td>${fmt(sim.sales[i])}</td>
-      <td style="text-align:center;color:#1d4ed8;font-weight:600;">${theoryStr}</td>
-      <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${safeStr}</td>
-      <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${safeRevStr}</td>
-      <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
-      <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
-    `;
+
+    // 安全ライン売上・来客数：予測売上と同じ伸び率で月次変化（1ヶ月目はPR未開始のため「-」）
+    if (i === 0) {
+      // 1ヶ月目：PR未開始
+      tr.innerHTML = `
+        <td>${i + 1}ヶ月目</td>
+        <td>${phases[i]}</td>
+        <td>${fmt(sim.costs[i])}</td>
+        <td>${fmt(sim.sales[i])}</td>
+        <td style="text-align:center;color:#1d4ed8;font-weight:600;">-</td>
+        <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">-</td>
+        <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">-</td>
+        <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
+        <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
+      `;
+    } else {
+      // 2ヶ月目以降：安全ライン売上・来客数を予測売上と同じ伸び率で表示
+      const safeSaleMonth = sim.safeSales[i];
+      const safeGuestsMonth = safeSaleMonth / unitPrice;
+      // 最低ライン来客数 = 安全ライン来客数 ÷ SAFE_FACTOR
+      const theoryGuestsMonth = safeGuestsMonth / SAFE_FACTOR;
+      tr.innerHTML = `
+        <td>${i + 1}ヶ月目${isBreakeven ? '<span class="breakeven-badge">黒字転換</span>' : ''}</td>
+        <td>${phases[i]}</td>
+        <td>${fmt(sim.costs[i])}</td>
+        <td>${fmt(sim.sales[i])}</td>
+        <td style="text-align:center;color:#1d4ed8;font-weight:600;">${fmtNum(theoryGuestsMonth, 1)}名</td>
+        <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${fmtNum(safeGuestsMonth, 1)}名</td>
+        <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${fmt(safeSaleMonth)}</td>
+        <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
+        <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
+      `;
+    }
     tbody.appendChild(tr);
   }
 }
