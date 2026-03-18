@@ -1025,26 +1025,47 @@ async function downloadPDF() {
     const { jsPDF } = window.jspdf;
     const content = document.getElementById('mainContent');
 
-    // Capture
+    // キャプチャ前に内容幅を固定幅（1400px）に強制して右端の見切れを防止
+    const originalWidth = content.style.width;
+    const originalMinWidth = content.style.minWidth;
+    content.style.width = '1400px';
+    content.style.minWidth = '1400px';
+
+    // スクロール位置を一時的にリセット
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    window.scrollTo(0, 0);
+
+    // Capture—実際のコンテンツ高さを取得して余白を排除
     const canvas = await html2canvas(content, {
       scale: 1.5,
       useCORS: true,
       backgroundColor: '#f5f7fa',
       logging: false,
+      width: 1400,
+      height: content.scrollHeight,
+      windowWidth: 1400,
+      scrollX: 0,
+      scrollY: 0,
     });
+
+    // 元のスタイルに戻す
+    content.style.width = originalWidth;
+    content.style.minWidth = originalMinWidth;
+    window.scrollTo(scrollX, scrollY);
 
     const imgData = canvas.toDataURL('image/png');
     const imgW = canvas.width;
     const imgH = canvas.height;
 
-    // A4: 210 x 297 mm
-    const pdfW = 210;
-    const pdfH = (imgH * pdfW) / imgW;
+    // A3横向（297 x 420mm）をベースに、内容高さに応じて調整
+    const pdfW = 297;  // A3横向幅
+    const pdfH = Math.ceil((imgH * pdfW) / imgW);
 
     const pdf = new jsPDF({
-      orientation: pdfH > pdfW ? 'portrait' : 'landscape',
+      orientation: 'landscape',
       unit: 'mm',
-      format: pdfH > 297 ? [pdfW, pdfH] : 'a4',
+      format: [pdfW, Math.max(pdfH, 210)],  // 最低高さ210mm保証
     });
 
     pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
