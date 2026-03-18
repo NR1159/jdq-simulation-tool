@@ -572,18 +572,18 @@
       <div class="section-title">単月費用対計算</div>
       <div class="kpi-grid">
         <div class="kpi-card accent-card">
-          <div class="kpi-label">必要売上（月）</div>
+          <div class="kpi-label">ボーダー売上（月）</div>
           <div class="kpi-value" id="kpiRevenue">¥0</div>
-          <div class="kpi-sub">月額費用 ÷ (1 - 原価率) + キャスティング原価</div>
+          <div class="kpi-sub">月額費用 ÷ (1 - 原価率) + キャスティング原価（最低ライン）</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">理論ライン（最低ライン）</div>
+          <div class="kpi-label">最低ライン（理論値）</div>
           <span class="kpi-badge badge-theory">THEORY</span>
           <div class="kpi-value" id="kpiTheoryMonth">0.0名/月</div>
           <div class="kpi-sub" id="kpiTheoryDay">0.00名/日</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">安全ライン</div>
+          <div class="kpi-label">安全ライン（推奨目標）</div>
           <span class="kpi-badge badge-safe">SAFE ×1.2</span>
           <div class="kpi-value" id="kpiSafeMonth">0.0名/月</div>
           <div class="kpi-sub" id="kpiSafeDay">0.00名/日</div>
@@ -592,8 +592,8 @@
       <!-- 安全ライン売上バナー -->
       <div class="safe-revenue-banner">
         <div>
-          <div class="banner-label">クライアントへの提案目標売上（安全ライン）</div>
-          <div style="font-size:0.72rem;color:rgba(255,255,255,0.8);margin-top:3px;">安全ライン来客数 × 客単価 ／ 理論ラインの1.2倍の売上を目標に設定</div>
+          <div class="banner-label">事業者様ボーダー売上（安全ライン）</div>
+          <div style="font-size:0.72rem;color:rgba(255,255,255,0.8);margin-top:3px;">最低ラインの1.2倍 ／ 商談ではこの数字を最低ラインとしてご提示ください</div>
         </div>
         <div style="text-align:right;">
           <div class="banner-value" id="kpiSafeRevenue">¥0</div>
@@ -640,9 +640,9 @@
               <th>フェーズ</th>
               <th>月次費用</th>
               <th>予測売上</th>
-              <th style="background:#dbeafe;color:#1d4ed8;">最低ライン<br><span style="font-size:0.7rem;font-weight:500;">必要来客数</span></th>
-              <th style="background:#fef3c7;color:#92400e;">安全ライン<br><span style="font-size:0.7rem;font-weight:500;">必要来客数</span></th>
-              <th style="background:#fef3c7;color:#92400e;">安全ライン<br><span style="font-size:0.7rem;font-weight:500;">目標売上</span></th>
+              <th style="background:#dbeafe;color:#1d4ed8;">最低ライン<br><span style="font-size:0.7rem;font-weight:500;">集客人数（日割り）</span></th>
+              <th style="background:#fef3c7;color:#92400e;">安全ライン<br><span style="font-size:0.7rem;font-weight:500;">集客人数（日割り）</span></th>
+              <th style="background:#fef3c7;color:#92400e;">安全ライン<br><span style="font-size:0.7rem;font-weight:500;">ボーダー売上</span></th>
               <th>月次損益</th>
               <th>累積損益</th>
             </tr>
@@ -743,12 +743,12 @@ function calcSimulation(pkg, unitPrice, costRate) {
 
   const totalCost = costs.reduce((a, b) => a + b, 0);
 
-  // 売上予測：1ヶ月目=0、2〜6ヶ月目で線形増加し6ヶ月累計≒6ヶ月累計費用
-  // 2〜6ヶ月目の5ヶ月で線形増加：S_k = a * k (k=1..5)
-  // sum = a*(1+2+3+4+5) = 15a = totalCost → a = totalCost/15
-  const a = totalCost / 15;
-  const sales = [0];
-  for (let k = 1; k <= 5; k++) {
+  // 売上予測：1ヶ月目から線形増加（間口を広げる施策により1ヶ月目も売上あり）
+  // 1〜6ヶ月目で線形増加：S_k = a * k (k=1..6)
+  // sum = a*(1+2+3+4+5+6) = 21a = totalCost → a = totalCost/21
+  const a = totalCost / 21;
+  const sales = [];
+  for (let k = 1; k <= 6; k++) {
     sales.push(a * k);
   }
 
@@ -775,11 +775,8 @@ function calcSimulation(pkg, unitPrice, costRate) {
   }
 
   // 安全ライン売上・来客数：予測売上と同じ伸び率（線形増加）で算出
-  // 安全ライン必要売上 = requiredRevenue * SAFE_FACTOR
-  // 予測売上の伸び率をそのまま適用：safeSales[k] = sales[k] * (safeRevenue / requiredRevenue)
-  // ただし1ヶ月目=0（PR未開始）
   const safeRevenue = requiredRevenue * SAFE_FACTOR;
-  const safeSales = sales.map(s => s === 0 ? 0 : s * SAFE_FACTOR);
+  const safeSales = sales.map(s => s * SAFE_FACTOR);
   const safeGuests = safeSales.map((s, i) => i === 0 ? 0 : s / (requiredRevenue / (requiredRevenue / (pkg.monthlyFee / (1 - costRate) + castingCostMonth) * requiredRevenue)));
 
   // 安全ライン来客数 = 安全ライン売上 ÷ 客単価（unitPriceはここでは渡されないため売上ベースで保持）
@@ -972,37 +969,23 @@ function updateTable(sim, pkg) {
     const cumClass = sim.cumProfits[i] >= 0 ? 'cum-positive' : 'cum-negative';
 
     // 安全ライン売上・来客数：予測売上と同じ伸び率で月次変化（1ヶ月目はPR未開始のため「-」）
-    if (i === 0) {
-      // 1ヶ月目：PR未開始
-      tr.innerHTML = `
-        <td>${i + 1}ヶ月目</td>
-        <td>${phases[i]}</td>
-        <td>${fmt(sim.costs[i])}</td>
-        <td>${fmt(sim.sales[i])}</td>
-        <td style="text-align:center;color:#1d4ed8;font-weight:600;">-</td>
-        <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">-</td>
-        <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">-</td>
-        <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
-        <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
-      `;
-    } else {
-      // 2ヶ月目以降：安全ライン売上・来客数を予測売上と同じ伸び率で表示
-      const safeSaleMonth = sim.safeSales[i];
-      const safeGuestsMonth = safeSaleMonth / unitPrice;
-      // 最低ライン来客数 = 安全ライン来客数 ÷ SAFE_FACTOR
-      const theoryGuestsMonth = safeGuestsMonth / SAFE_FACTOR;
-      tr.innerHTML = `
-        <td>${i + 1}ヶ月目${isBreakeven ? '<span class="breakeven-badge">黒字転換</span>' : ''}</td>
-        <td>${phases[i]}</td>
-        <td>${fmt(sim.costs[i])}</td>
-        <td>${fmt(sim.sales[i])}</td>
-        <td style="text-align:center;color:#1d4ed8;font-weight:600;">${fmtNum(theoryGuestsMonth, 1)}名</td>
-        <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${fmtNum(safeGuestsMonth, 1)}名</td>
-        <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${fmt(safeSaleMonth)}</td>
-        <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
-        <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
-      `;
-    }
+    // 全月：安全ライン売上・来客数を予測売上と同じ伸び率で表示（1ヶ月目も間口施策で売上あり）
+    const safeSaleMonth = sim.safeSales[i];
+    const safeGuestsMonth = safeSaleMonth / unitPrice;
+    const theoryGuestsMonth = safeGuestsMonth / SAFE_FACTOR;
+    const theoryGuestsDay = theoryGuestsMonth / daysPerMonth;
+    const safeGuestsDay = safeGuestsMonth / daysPerMonth;
+    tr.innerHTML = `
+      <td>${i + 1}ヶ月目${isBreakeven ? '<span class="breakeven-badge">黒字転換</span>' : ''}</td>
+      <td>${phases[i]}</td>
+      <td>${fmt(sim.costs[i])}</td>
+      <td>${fmt(sim.sales[i])}</td>
+      <td style="text-align:center;color:#1d4ed8;font-weight:600;">${fmtNum(theoryGuestsMonth, 1)}名<br><span style="font-size:0.75rem;font-weight:400;color:#3b82f6;">(${fmtNum(theoryGuestsDay, 1)}名/日)</span></td>
+      <td style="text-align:center;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${fmtNum(safeGuestsMonth, 1)}名<br><span style="font-size:0.75rem;font-weight:400;color:#b45309;">(${fmtNum(safeGuestsDay, 1)}名/日)</span></td>
+      <td style="text-align:right;color:#92400e;font-weight:700;background:rgba(254,243,199,0.4);">${fmt(safeSaleMonth)}</td>
+      <td class="${sim.monthlyProfits[i] >= 0 ? 'cum-positive' : 'cum-negative'}">${fmt(sim.monthlyProfits[i])}</td>
+      <td class="${cumClass}">${fmt(sim.cumProfits[i])}</td>
+    `;
     tbody.appendChild(tr);
   }
 }
