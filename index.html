@@ -574,7 +574,7 @@
         <div class="kpi-card accent-card">
           <div class="kpi-label">ボーダー売上（月）</div>
           <div class="kpi-value" id="kpiRevenue">¥0</div>
-          <div class="kpi-sub">月額費用 ÷ (1 - 原価率) + キャスティング原価（最低ライン）</div>
+          <div class="kpi-sub">月額費用 ÷ (1 - 原価率) + 撮影食材原価（最低ライン）</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">最低ライン（理論値）</div>
@@ -700,9 +700,9 @@ function getInputs() {
 
 // ===== Calculation =====
 function calcMonthly(pkg, unitPrice, costRate, daysPerMonth) {
-  // キャスティング原価（月）
+  // 撮影食材原価（月）
   const castingCostMonth = unitPrice * (pkg.casting6m / MONTHS) * costRate;
-  // 必要売上（月）= 月額費用 ÷ (1 - 原価率) + キャスティング原価（月）
+  // 必要売上（月）= 月額費用 ÷ (1 - 原価率) + 撮影食材原価（月）
   const requiredRevenue = pkg.monthlyFee / (1 - costRate) + castingCostMonth;
   // 理論ライン：必要来客数 = 必要売上 ÷ 客単価
   const theoryGuestsMonth = requiredRevenue / unitPrice;
@@ -724,9 +724,9 @@ function calcMonthly(pkg, unitPrice, costRate, daysPerMonth) {
 }
 
 function calcSimulation(pkg, unitPrice, costRate) {
-  // キャスティング原価（月）
+  // 撮影食材原価（月）
   const castingCostMonth = unitPrice * (pkg.casting6m / MONTHS) * costRate;
-  // 必要売上（月）= 月額費用 ÷ (1 - 原価率) + キャスティング原価（月）
+  // 必要売上（月）= 月額費用 ÷ (1 - 原価率) + 撮影食材原価（月）
   const requiredRevenue = pkg.monthlyFee / (1 - costRate) + castingCostMonth;
 
   // 月次費用：必要売上ベース
